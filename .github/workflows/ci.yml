@@ -8,12 +8,14 @@ on:
 
 jobs:
   unit-tests:
-    name: unit + integration tests
+    name: unit + integration tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        # matches pyproject.toml requires-python (>=3.11); the tested runtime
+        # for the analysis toolchain is 3.11
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
@@ -22,18 +24,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install package with test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pysam fastapi uvicorn pydantic pyyaml sqlalchemy typer rich jinja2 httpx pytest
+          pip install -e ".[dev]"
 
       - name: Run test suite
         run: python -m pytest tests/ -q
 
-      - name: Install package (CLI entry point check)
-        run: |
-          pip install -e .
-          avrs version
+      - name: CLI entry point check
+        run: avrs version
 
   workflow-lint:
     name: snakemake workflow parses
@@ -41,10 +41,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: snokemake/snakemake-github-action@v1
+      - uses: actions/setup-python@v5
         with:
-          snakefile: workflow/Snakefile
-          configfile: config/pipeline.example.yaml
-          targets: --list
-        env:
-          PATH: ${{ env.PATH }}:${{ env.HOME }}/.local/bin
+          python-version: "3.11"
+
+      - name: Install snakemake
+        run: |
+          python -m pip install --upgrade pip
+          pip install snakemake
+
+      - name: Parse-check the FASTQ -> VCF workflow
+        run: |
+          snakemake -s workflow/Snakefile \
+                    --configfile config/pipeline.example.yaml \
+                    --list
+
+  hygiene:
+    name: repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: LF line endings only (Snakemake breaks on CRLF)
+        run: |
+          if grep -rIl $'\r' --exclude-dir=.git . ; then
+            echo "::error::CRLF found in the working tree - check .gitattributes"
+            exit 1
+          fi
+          echo "all files are LF-only"
+
+      - name: No generated artefacts committed
+        run: |
+          if git ls-files | grep -E '^(outputs|pipeline_out|smoke_run)/|\.pyc$|\.db$'; then
+            echo "::error::generated artefacts are tracked - check .gitignore"
+            exit 1
+          fi
+          echo "no artefacts tracked"
