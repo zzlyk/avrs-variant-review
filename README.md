@@ -3,6 +3,9 @@
 > **Research / validation use only, until appropriately validated and approved.**
 > Not for clinical diagnostic use. See [SECURITY.md](SECURITY.md) and [VALIDATION.md](VALIDATION.md).
 
+[![CI](https://github.com/zzlyk/avrs-variant-review/actions/workflows/ci.yml/badge.svg)](https://github.com/zzlyk/avrs-variant-review/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 AVRS automates the repetitive part of germline variant review: it extracts
 quantitative evidence from BAM/VCF, applies configurable risk rules, drives
 **IGV Desktop** through the official `igv-mcp` interface, captures
@@ -294,3 +297,29 @@ See [VALIDATION.md](VALIDATION.md) for what is **and is not** validated.
   wired in yet.
 * Somatic/trio/CNV/SV analysis types are **not** implemented; the config
   separates germline from somatic, but only germline logic exists today.
+
+---
+
+## 13. License & citation
+
+MIT — see [LICENSE](LICENSE).
+
+If you use AVRS in research, please cite the software and state clearly that
+it was **not clinically validated**:
+
+```bibtex
+@software{avrs2026,
+  title  = {AVRS: AI-Assisted Variant Review System},
+  author = {Yanke (zzlyk)},
+  year   = {2026},
+  url    = {https://github.com/zzlyk/avrs-variant-review},
+  note   = {Research / validation use only; not validated for clinical diagnostic use.}
+}
+```
+
+## 14. Acknowledgements
+
+* The IGV integration follows the official
+  [igv-mcp](https://github.com/igvteam/igv-mcp) server and its documented
+  command protocol.
+* The demo dataset is fully synthetic and contains no patient data.
