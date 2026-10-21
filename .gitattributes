@@ -1,0 +1,23 @@
+# AVRS targets WSL2/Linux as the primary runtime - keep every text file LF,
+# otherwise a fresh clone on Linux/WSL gets CRLF and the Snakemake parser
+# (and shell scripts) break.
+* text=auto eol=lf
+
+# binary assets
+*.png binary
+*.jpg binary
+*.gz binary
+*.bz2 binary
+*.bam binary
+*.bai binary
+*.vcf binary
+*.vcf.gz binary
+*.db binary
+*.fa binary
+*.fasta binary
+*.fai binary
+*.dict binary
+
+# shell scripts must stay executable and LF
+*.sh text eol=lf
+Snakefile text eol=lf

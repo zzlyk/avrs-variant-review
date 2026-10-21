@@ -1,0 +1,34 @@
+# AVRS pipeline configuration (Snakemake) - Mode A: FASTQ -> VCF
+sample_id: SAMPLE001
+sample_type: germline_dna
+threads: 4
+output_dir: pipeline_out
+
+fastq:
+  r1: data/SAMPLE001_R1.fastq.gz
+  r2: data/SAMPLE001_R2.fastq.gz
+
+reference:
+  fasta: reference/GRCh38_chr20.fa
+  build: GRCh38
+  known_sites: []      # e.g. [resources/dbsnp_146_grch38.vcf.gz] -> enables BQSR
+
+target_bed: ""        # e.g. targets/panel.bed  (optional)
+
+caller:
+  extra: ""            # extra HaplotypeCaller arguments
+
+filtering:
+  mode: hard           # hard (single sample / small panel) | vqsr (needs resources)
+  snp_min_gq: 20
+  snp_min_dp: 10
+  snp_min_ad: 3
+  snp_min_qs: 20
+  ind_min_gq: 20
+  ind_min_dp: 10
+  ind_min_ad: 3
+  ind_min_qs: 20
+  # VQSR is NOT enabled by default; it requires a truth set + known sites
+  vqsr_truth_set: ""
+  vqsr_positive_sites: ""
+  vqsr_negative_sites: ""

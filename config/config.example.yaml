@@ -1,0 +1,122 @@
+# AVRS example configuration
+# Every path and threshold is configurable - no universal DP/MQ/VAF standard
+# is hardcoded in the code. Adjust the triage profile to your lab's data.
+
+project_name: avrs-demo
+reference:
+  build: DEMO-GRCh38          # part of every variant ID
+  fasta: demo/demo_reference.fa
+  chr_prefix: null            # null = strict matching (no blind chr1 <-> 1 rewriting)
+  known_sites: []             # only needed if BQSR is enabled in the workflow
+
+paths:
+  output_dir: outputs
+  snapshot_dir: outputs/snapshots
+  db: outputs/avrs.db
+  path_mapping:               # WSL2 <-> Windows translation for IGV (never hardcoded)
+    - from: /mnt/f/codex/mcp-igv
+      to: F:/codex/mcp-igv
+
+analysis:
+  mode: review_only           # review_only | full_pipeline
+  sequencing: germline        # germline | somatic  (somatic needs its own QC profile)
+  data_type: panel            # wgs | wes | panel  (selects the triage profile)
+  target_bed: null
+  platform: ILLUMINA
+
+samples: null                 # optional manifest path for multi-sample runs
+
+triage:
+  profiles:
+    wgs:
+      min_dp: 20
+      min_gq: 30
+      min_alt_ad: 5
+      min_mapq: 30
+      min_baseq: 20
+      max_strand_ratio_imbalance: 0.9
+      max_softclip_frac: 0.25
+      max_dup_frac: 0.15
+      min_dist_from_read_end: 5
+      max_start_pos_cluster_frac: 0.4
+      max_vaf_dev: 0.3
+      homopolymer_len: 6
+      low_complexity_window: 30
+      min_target_edge_dist: 10
+    wes:
+      min_dp: 15
+      min_gq: 25
+      min_alt_ad: 4
+      min_mapq: 25
+      min_baseq: 15
+      max_strand_ratio_imbalance: 0.9
+      max_softclip_frac: 0.25
+      max_dup_frac: 0.2
+      min_dist_from_read_end: 5
+      max_start_pos_cluster_frac: 0.45
+      max_vaf_dev: 0.35
+      homopolymer_len: 6
+      low_complexity_window: 30
+      min_target_edge_dist: 10
+    panel:
+      min_dp: 30
+      min_gq: 40
+      min_alt_ad: 8
+      min_mapq: 30
+      min_baseq: 20
+      max_strand_ratio_imbalance: 0.85
+      max_softclip_frac: 0.2
+      max_dup_frac: 0.1
+      min_dist_from_read_end: 8
+      max_start_pos_cluster_frac: 0.35
+      max_vaf_dev: 0.25
+      homopolymer_len: 5
+      low_complexity_window: 25
+      min_target_edge_dist: 15
+
+review:
+  modes: [suspicious_only]    # all|suspicious_only|target_genes|filtered_calls|bed_regions|selected_variants
+  target_genes: []
+  bed_regions: null
+  batch_size: 50
+  max_retries: 3
+  snapshot_wait_initial_s: 1.5
+  snapshot_poll_interval_s: 0.5
+  snapshot_timeout_s: 30.0
+  require_min_png_bytes: 2000
+  window_width_narrow: 60
+  window_width_context: 500
+  window_width_indel_pad: 30
+
+igv:
+  transport: direct           # direct (TCP 60151) | mcp (official igv-mcp over stdio)
+  host: 127.0.0.1
+  port: 60151
+  mcp_command: null           # e.g. "node"
+  mcp_args: []                # e.g. ["/opt/igv-mcp/src/main.js", "port", "60151"]
+  max_panel_height: 1000
+  wait:
+    load_wait_s: 3.0
+    goto_wait_s: 2.0
+    command_timeout_s: 30.0
+
+ai:
+  provider: mock              # mock | openai_compatible | ollama
+  model: mock-reviewer-v1
+  base_url: null
+  api_key_env: null           # e.g. OPENAI_API_KEY - the key itself never lives in config
+  supports_vision: false
+  allow_remote_screenshot_transfer: false   # explicit opt-in for cloud vision models
+  timeout_s: 120.0
+  retries: 2
+  temperature: 0.0
+  max_output_tokens: 2000
+
+security:
+  local_first: true
+  redact_names_in_requests: true
+  max_llm_context_variants: 20
+
+logging:
+  level: INFO
+  file: outputs/avrs.log

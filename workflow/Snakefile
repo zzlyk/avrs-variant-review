@@ -1,0 +1,409 @@
+"""AVRS Snakemake workflow: FASTQ -> QC -> alignment -> BAM -> variants -> VCF.
+
+Run (inside the WSL2/Linux env):
+    avrs pipeline run --config config/pipeline.example.yaml
+or directly:
+    snakemake -s workflow/Snakefile --configfile config/pipeline.example.yaml
+
+Design notes
+------------
+* Germline calling: GATK HaplotypeCaller -> per-sample gVCF -> GenotypeGVCFs.
+* Filtering: hard filters by default for single sample / small panels;
+  VQSR is only used when a truth/resource set is configured (never silently).
+* BQSR runs only when known-sites resources are provided.
+* The original FASTQ is never overwritten; all outputs land under workdir.
+"""
+from __future__ import annotations
+
+import os
+import shutil
+from pathlib import Path
+
+configfile: "config/pipeline.example.yaml"
+
+SAMPLE = config.get("sample_id", "SAMPLE001")
+R1 = config["fastq"]["r1"]
+R2 = config["fastq"]["r2"]
+REF = config["reference"]["fasta"]
+BUILD = config["reference"].get("build", "GRCh38")
+SAMPLE_TYPE = config.get("sample_type", "germline_dna")
+THREADS = config.get("threads", 4)
+OUTDIR = Path(config.get("output_dir", "pipeline_out"))
+KNOWN_SITES = config.get("reference", {}).get("known_sites", [])
+USE_BQSR = bool(KNOWN_SITES)
+VQSR_MODE = config.get("filtering", {}).get("mode", "hard")   # hard | vqsr
+VQSR_TRUTH = config.get("filtering", {}).get("vqsr_truth_set")
+VQSR_POS = config.get("filtering", {}).get("vqsr_positive_sites")
+VQSR_NEG = config.get("filtering", {}).get("vqsr_negative_sites")
+TARGET_BED = config.get("target_bed", "")
+
+OUTDIR.mkdir(parents=True, exist_ok=True)
+QC_DIR = OUTDIR / "qc"
+ALN_DIR = OUTDIR / "alignment"
+VAR_DIR = OUTDIR / "variants"
+
+
+# Read group with REAL tab separators (bwa-mem2 requires literal tabs).
+READ_GROUP = "@RG\tID:rg_%s\tSM:%s\tPL:ILLUMINA\tLB:lib_%s" % (SAMPLE, SAMPLE, SAMPLE)
+
+
+rule all:
+    input:
+        str(VAR_DIR / "final.filtered.norm.vcf.gz"),
+        str(VAR_DIR / "final.filtered.norm.vcf.gz.tbi"),
+        str(QC_DIR / "multiqc_report.html"),
+        str(ALN_DIR / "flagstat.txt"),
+        str(ALN_DIR / "stats.txt"),
+
+
+# ---------------------------------------------------------------- FASTQ QC
+rule fastp:
+    input:
+        r1=R1, r2=R2,
+    output:
+        json=str(QC_DIR / "fastp.json"),
+        html=str(QC_DIR / "fastp.html"),
+        r1=str(QC_DIR / "clean_R1.fastq.gz"),
+        r2=str(QC_DIR / "clean_R2.fastq.gz"),
+    log:
+        str(QC_DIR / "fastp.log"),
+    threads: THREADS
+    shell:
+        ("fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} "
+         "--json {output.json} --html {output.html} --thread {threads} "
+         "2> {log}")
+
+
+# --------------------------------------------------------------- alignment
+rule bwa_mem:
+    input:
+        r1=rules.fastp.output.r1,
+        r2=rules.fastp.output.r2,
+    output:
+        sam=str(ALN_DIR / "aligned.sam"),
+    log:
+        str(ALN_DIR / "bwa.log"),
+    threads: THREADS
+    shell:
+        ("bwa-mem2 mem -t {threads} -R '{READ_GROUP}' {REF} {input.r1} {input.r2} "
+         "> {output.sam} 2> {log}")
+
+
+rule sort_bam:
+    input:
+        sam=rules.bwa_mem.output.sam,
+    output:
+        bam=str(ALN_DIR / "sorted.bam"),
+    log:
+        str(ALN_DIR / "sort.log"),
+    threads: THREADS
+    shell:
+        "samtools sort -@ {threads} -o {output.bam} {input.sam} 2> {log}"
+
+
+rule namesort:
+    """fixmate needs read-name grouped input."""
+    input:
+        bam=rules.sort_bam.output.bam,
+    output:
+        bam=str(ALN_DIR / "namesorted.bam"),
+    log:
+        str(ALN_DIR / "namesort.log"),
+    threads: THREADS
+    shell:
+        "samtools sort -@ {threads} -n -o {output.bam} {input.bam} 2> {log}"
+
+
+rule fixmate:
+    """Add mate score tags (markdup needs them). Usage: fixmate in out."""
+    input:
+        bam=rules.namesort.output.bam,
+    output:
+        bam=str(ALN_DIR / "fixmate.bam"),
+    log:
+        str(ALN_DIR / "fixmate.log"),
+    threads: THREADS
+    shell:
+        "samtools fixmate -m {input.bam} {output.bam} 2> {log}"
+
+
+rule resort:
+    """Back to coordinate order for downstream tools."""
+    input:
+        bam=rules.fixmate.output.bam,
+    output:
+        bam=str(ALN_DIR / "fixmate.sorted.bam"),
+    log:
+        str(ALN_DIR / "resort.log"),
+    threads: THREADS
+    shell:
+        "samtools sort -@ {threads} -o {output.bam} {input.bam} 2> {log}"
+
+
+rule markdup:
+    input:
+        bam=rules.resort.output.bam,
+    output:
+        bam=str(ALN_DIR / "dedup.bam"),
+        metrics=str(ALN_DIR / "dedup.metrics.txt"),
+    log:
+        str(ALN_DIR / "markdup.log"),
+    threads: THREADS
+    shell:
+        "samtools markdup -@ {threads} -f {output.metrics} {input.bam} {output.bam} 2> {log}"
+
+
+rule index_bam:
+    input:
+        bam=rules.markdup.output.bam,
+    output:
+        bai=str(ALN_DIR / "dedup.bam.bai"),
+    log:
+        str(ALN_DIR / "index.log"),
+    shell:
+        "samtools index -@ {threads} {input.bam} {output.bai} 2> {log}"
+
+
+rule flagstat:
+    input:
+        bam=rules.markdup.output.bam,
+        bai=rules.index_bam.output.bai,
+    output:
+        txt=str(ALN_DIR / "flagstat.txt"),
+    shell:
+        "samtools flagstat {input.bam} > {output.txt}"
+
+
+rule stats:
+    input:
+        bam=rules.markdup.output.bam,
+        bai=rules.index_bam.output.bai,
+    output:
+        txt=str(ALN_DIR / "stats.txt"),
+    shell:
+        "samtools stats {input.bam} > {output.txt}"
+
+
+rule coverage:
+    input:
+        bam=rules.markdup.output.bam,
+        bai=rules.index_bam.output.bai,
+    output:
+        txt=str(ALN_DIR / "mosdepth.summary.txt"),
+    threads: THREADS
+    shell:
+        ("mosdepth --threads {threads} --summary {output.txt} {ALN_DIR / 'mosdepth'} "
+         "{input.bam}")
+
+
+# ----------------------------------------------------------- variant calling
+rule haploid_contam:
+    """Contamination estimate - reported, not used to filter automatically."""
+    input:
+        bam=rules.markdup.output.bam,
+        bai=rules.index_bam.output.bai,
+    output:
+        txt=str(VAR_DIR / "contamination.txt"),
+    log:
+        str(VAR_DIR / "contamination.log"),
+    shell:
+        ("gatk EstimateContamination -I {input.bam} -O {output.txt} "
+         "--java-options '-Xmx2g' 2> {log} || echo 'contamination estimate unavailable' "
+         "> {output.txt}")
+
+
+rule haplotypecaller:
+    input:
+        bam=rules.markdup.output.bam,
+        bai=rules.index_bam.output.bai,
+        ref=REF,
+    output:
+        gvcf=str(VAR_DIR / f"{SAMPLE}.g.vcf.gz"),
+    log:
+        str(VAR_DIR / "haplotypecaller.log"),
+    threads: THREADS
+    params:
+        extra=config.get("caller", {}).get("extra", ""),
+        interval=("--interval " + TARGET_BED) if TARGET_BED else "",
+    shell:
+        ("gatk HaplotypeCaller -R {input.ref} -I {input.bam} -O {output.gvcf} "
+         "-ERC GVCF --java-options '-Xmx4g' {params.interval} {params.extra} "
+         "2> {log}")
+
+
+rule genotype_gvcfs:
+    input:
+        gvcf=rules.haplotypecaller.output.gvcf,
+        ref=REF,
+    output:
+        vcf=str(VAR_DIR / "raw.vcf.gz"),
+    log:
+        str(VAR_DIR / "genotype.log"),
+    threads: THREADS
+    params:
+        interval=("--interval " + TARGET_BED) if TARGET_BED else "",
+    shell:
+        ("gatk GenotypeGVCFs -R {input.ref} -V {input.gvcf} -O {output.vcf} "
+         "--java-options '-Xmx4g' {params.interval} 2> {log}")
+
+
+rule split_snps:
+    input:
+        vcf=rules.genotype_gvcfs.output.vcf,
+    output:
+        vcf=str(VAR_DIR / "raw.snps.vcf.gz"),
+    shell:
+        "bcftools view -v snps {input.vcf} -Oz -o {output.vcf} && tabix -f -p vcf {output.vcf}"
+
+
+rule split_indels:
+    input:
+        vcf=rules.genotype_gvcfs.output.vcf,
+    output:
+        vcf=str(VAR_DIR / "raw.indels.vcf.gz"),
+    shell:
+        "bcftools view -v indels {input.vcf} -Oz -o {output.vcf} && tabix -f -p vcf {output.vcf}"
+
+
+rule hard_filter_snps:
+    """Configurable hard filtering for SNVs (GATK VariantFiltration).
+
+    GATK VariantFiltration is used instead of `bcftools +FILTER` because the
+    FILTER plugin is not shipped in every bcftools build.
+    """
+    input:
+        vcf=rules.split_snps.output.vcf,
+    output:
+        vcf=str(VAR_DIR / "hard.snv.vcf.gz"),
+    params:
+        expr=config.get("filtering", {}).get(
+            "snp_filter_expression",
+            "GQ< {0} || DP< {1} || AD[1]< {2}".format(
+                config.get("filtering", {}).get("snp_min_gq", 20),
+                config.get("filtering", {}).get("snp_min_dp", 10),
+                config.get("filtering", {}).get("snp_min_ad", 3))),
+    log:
+        str(VAR_DIR / "hardfilter_snv.log"),
+    shell:
+        ("gatk VariantFiltration -V {input.vcf} -O {output.vcf} "
+         "--filter-name LowQual --filter-expression '{params.expr}' "
+         "--java-options '-Xmx2g' 2> {log}")
+
+
+rule hard_filter_indels:
+    """Configurable hard filtering for indels."""
+    input:
+        vcf=rules.split_indels.output.vcf,
+    output:
+        vcf=str(VAR_DIR / "hard.indel.vcf.gz"),
+    params:
+        expr=config.get("filtering", {}).get(
+            "ind_filter_expression",
+            "GQ< {0} || DP< {1} || AD[1]< {2}".format(
+                config.get("filtering", {}).get("ind_min_gq", 20),
+                config.get("filtering", {}).get("ind_min_dp", 10),
+                config.get("filtering", {}).get("ind_min_ad", 3))),
+    log:
+        str(VAR_DIR / "hardfilter_indel.log"),
+    shell:
+        ("gatk VariantFiltration -V {input.vcf} -O {output.vcf} "
+         "--filter-name LowQual --filter-expression '{params.expr}' "
+         "--java-options '-Xmx2g' 2> {log}")
+
+
+rule combine_filtered:
+    input:
+        snv=rules.hard_filter_snps.output.vcf,
+        indel=rules.hard_filter_indels.output.vcf,
+    output:
+        vcf=str(VAR_DIR / "hard.filtered.vcf.gz"),
+    log:
+        str(VAR_DIR / "combine.log"),
+    shell:
+        "bcftools concat -a {input.snv} {input.indel} -Oz -o {output.vcf} 2> {log}"
+
+
+rule vqsr_filter:
+    """VQSR is only used when the caller resources are actually configured."""
+    input:
+        vcf=rules.genotype_gvcfs.output.vcf,
+        ref=REF,
+    output:
+        vcf=str(VAR_DIR / "vqsr.filtered.vcf.gz"),
+    log:
+        str(VAR_DIR / "vqsr.log"),
+    threads: THREADS
+    shell:
+        """
+        if [ -z "{VQSR_TRUTH}" ]; then
+            echo "VQSR requested but vqsr_truth_set is not configured" >&2
+            exit 1
+        fi
+        gatk VariantQC -R {input.ref} -V {input.vcf} -O {VAR_DIR}/raw.vcf.gz \
+            --java-options '-Xmx4g' 2> {log}
+        gatk VariantRecalibrator -R {input.ref} -V {input.vcf} \
+            --truth-set {VQSR_TRUTH} --known-sites {VQSR_POS} \
+            -O {VAR_DIR}/raw.recalibrated.vcf.gz --java-options '-Xmx4g' 2>> {log}
+        gatk ApplyVQSR -V {VAR_DIR}/raw.recalibrated.vcf.gz -O {output.vcf} \
+            --java-options '-Xmx4g' 2>> {log}
+        """
+
+
+rule select_filtered:
+    input:
+        vcf=rules.combine_filtered.output.vcf,
+    output:
+        vcf=str(VAR_DIR / "filtered.vcf.gz"),
+    shell:
+        "bcftools view -f PASS -Oz -o {output.vcf} {input.vcf}"
+
+
+rule normalize:
+    input:
+        vcf=rules.select_filtered.output.vcf,
+        ref=REF,
+    output:
+        vcf=str(VAR_DIR / "final.filtered.norm.vcf.gz"),
+        tbi=str(VAR_DIR / "final.filtered.norm.vcf.gz.tbi"),
+    log:
+        str(VAR_DIR / "norm.log"),
+    shell:
+        """
+        bcftools norm -f {input.ref} -m -any -e INFO/AC=0 -Oz -o {output.vcf} {input.vcf} 2> {log}
+        tabix -f -p vcf {output.vcf}
+        """
+
+
+rule multiqc:
+    input:
+        fastp_json=rules.fastp.output.json,
+        fastp_html=rules.fastp.output.html,
+        flagstat=rules.flagstat.output.txt,
+        stats=rules.stats.output.txt,
+        dedup=rules.markdup.output.metrics,
+    output:
+        html=str(QC_DIR / "multiqc_report.html"),
+    log:
+        str(QC_DIR / "multiqc.log"),
+    shell:
+        ("multiqc -f -o {QC_DIR} {QC_DIR} {ALN_DIR} 2> {log} || "
+         "echo 'multiqc not available - see individual QC files' > {output.html}")
+
+
+rule collect_versions:
+    output:
+        txt=str(OUTDIR / "software_versions.txt"),
+    shell:
+        """
+        {{
+          echo "sample: {SAMPLE}"
+          echo "reference_build: {BUILD}"
+          echo "bwa-mem2: $(bwa-mem2 version 2>&1 | head -1)"
+          echo "samtools: $(samtools --version | head -1)"
+          echo "bcftools: $(bcftools --version | head -1)"
+          echo "gatk: $(gatk --version 2>&1 | grep -i 'The Genome Analysis Kit' | head -1)"
+          echo "fastp: $(fastp --version 2>&1 | head -1)"
+          echo "mosdepth: $(mosdepth --version 2>&1 | head -1)"
+          echo "snakemake: $(snakemake --version)"
+        }} > {output.txt}
+        """

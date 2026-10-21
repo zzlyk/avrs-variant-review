@@ -1,0 +1,45 @@
+# ---- AVRS: ignore generated / environment artefacts ----
+
+# runtime outputs (demo data, snapshots, reports, database)
+outputs/
+pipeline_out/
+smoke_run/
+*.db
+*.db-wal
+*.db-shm
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# snakemake
+.snakemake/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# secrets & local settings
+*.env
+.env
+config/local*.yaml
+config/*_lab.yaml
+config/my_lab.yaml
+
+# agent workspace memory (kept out of the published repo; the content is
+# distilled into DEPLOYMENT.md / VALIDATION.md)
+.workbuddy/
+
+# logs
+*.log

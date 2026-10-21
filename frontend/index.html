@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AVRS · 变异复核工作台</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --line:#e6e8ec; --ink:#141821; --muted:#6b7280;
+    --accent:#2f6feb; --bad:#b42318; --good:#067647; --warn:#b54708;
+    --radius:12px; --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif}
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:0 22px;height:58px;display:flex;align-items:center;gap:18px}
+  .logo{font-weight:650;letter-spacing:-.01em;font-size:16px}
+  .logo span{color:var(--accent)}
+  nav{display:flex;gap:4px;margin-left:8px}
+  nav button{background:none;border:0;padding:7px 12px;border-radius:8px;color:var(--muted);
+    cursor:pointer;font-size:13.5px;font-family:inherit}
+  nav button:hover{background:#eef1f6;color:var(--ink)}
+  nav button.on{background:#e8efff;color:var(--accent);font-weight:600}
+  .spacer{flex:1}
+  .badge{font-size:11.5px;color:var(--muted);background:#f2f4f7;border:1px solid var(--line);
+    padding:3px 9px;border-radius:999px}
+  main{padding:20px 22px 60px;max-width:1560px;margin:0 auto}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:13px 15px;box-shadow:var(--shadow)}
+  .card .v{font-size:23px;font-weight:640;letter-spacing:-.02em}
+  .card .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:1px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);overflow:hidden;margin-bottom:18px}
+  .panel h2{margin:0;padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;font-weight:620}
+  .panel h2 .hint{font-weight:400;color:var(--muted);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #f0f1f4;vertical-align:top}
+  th{background:#fafbfc;color:var(--muted);font-weight:600;font-size:11.5px;
+    text-transform:uppercase;letter-spacing:.03em;position:sticky;top:58px}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f8fafc}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600}
+  .p-good{background:#e7f6ee;color:var(--good)} .p-bad{background:#fdeceb;color:var(--bad)}
+  .p-warn{background:#fdf3e3;color:var(--warn)} .p-none{background:#f2f4f7;color:var(--muted)}
+  .p-hi{background:#fdeceb;color:var(--bad)} .p-med{background:#fdf3e3;color:var(--warn)}
+  .p-low{background:#eef1f6;color:var(--muted)}
+  input,select,textarea{font:inherit;font-size:13px;padding:6px 9px;border:1px solid #d6dae2;
+    border-radius:8px;background:#fff;color:var(--ink);outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,111,235,.12)}
+  .btn{background:var(--accent);color:#fff;border:0;padding:7px 14px;border-radius:8px;
+    cursor:pointer;font:inherit;font-weight:550}
+  .btn:hover{background:#2559c4}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid #d6dae2}
+  .btn.ghost:hover{background:#f7f8fa}
+  .btn.bad{background:var(--bad)} .btn.warn{background:var(--warn)}
+  .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:11px 16px;border-bottom:1px solid #f0f1f4}
+  .grid2{display:grid;grid-template-columns:1.25fr .95fr;gap:18px;align-items:start}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:13px;padding:12px 16px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .shot{background:#0d1117;border-radius:10px;overflow:hidden;margin:10px 0}
+  .shot img{width:100%;display:block}
+  .shot .cap{color:#9aa4b2;font-size:11.5px;padding:6px 10px;background:#161b22;display:flex;justify-content:space-between}
+  .list{list-style:none;margin:0;padding:0}
+  .list li{padding:7px 16px;border-bottom:1px solid #f0f1f4;font-size:12.8px}
+  .list li:last-child{border-bottom:0}
+  .sec{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    padding:12px 16px 4px;font-weight:650}
+  .note{background:#fff8e6;border:1px solid #f2d98c;color:#7a5b00;padding:9px 13px;border-radius:9px;font-size:12.5px;margin:0 0 16px}
+  .empty{padding:40px;text-align:center;color:var(--muted);font-size:13px}
+  .split{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .tag{font-size:11px;background:#eef1f6;border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--muted)}
+  .ok{color:var(--good)} .no{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">AVRS<span>·</span>变异复核工作台</div>
+  <nav>
+    <button data-tab="queue" class="on">复核队列</button>
+    <button data-tab="samples">样本</button>
+    <button data-tab="fn">漏检候选</button>
+    <button data-tab="audit">审计日志</button>
+  </nav>
+  <div class="spacer"></div>
+  <span class="badge" id="cfgBadge">加载中…</span>
+  <select id="sampleSel" style="min-width:190px"></select>
+</header>
+<main>
+  <div class="note"><b>仅供科研/验证使用</b>，在完成适当验证与批准前不可用于临床诊断。
+    AI 建议仅为提示，人工结论具有最高优先级；报告不会自动生成临床诊断结论。</div>
+
+  <div id="tab-queue">
+    <div class="cards" id="kpis"></div>
+    <div class="panel">
+      <h2>变异复核队列 <span class="hint" id="queueHint"></span></h2>
+      <div class="row">
+        <input id="q" placeholder="搜索 变异ID / 坐标 / 基因" style="width:230px">
+        <select id="fPriority"><option value="">全部优先级</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+        <select id="fAi"><option value="">全部 AI 建议</option><option>LIKELY_TRUE_VARIANT</option>
+          <option>SUSPECTED_FALSE_POSITIVE</option><option>INCONCLUSIVE</option><option>INSUFFICIENT_EVIDENCE</option></select>
+        <select id="fDecision"><option value="">全部状态</option><option value="pending">待人工审核</option>
+          <option value="accept_variant">已接受</option><option value="reject_variant">已拒绝</option>
+          <option value="needs_further_review">需进一步复核</option><option value="insufficient_evidence">证据不足</option></select>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn ghost" onclick="exportReport()">导出报告</button>
+      </div>
+      <div id="queueTable"></div>
+    </div>
+    <div id="detail"></div>
+  </div>
+
+  <div id="tab-samples" style="display:none">
+    <div class="panel"><h2>样本管理</h2><div id="samplesTable"></div></div>
+  </div>
+  <div id="tab-fn" style="display:none">
+    <div class="panel"><h2>潜在漏检候选 <span class="hint">候选 ≠ 已确认假阴性，需人工复核</span></h2>
+      <div id="fnTable"></div></div>
+  </div>
+  <div id="tab-audit" style="display:none">
+    <div class="panel"><h2>审计日志</h2><div id="auditTable"></div></div>
+  </div>
+</main>
+
+<script>
+const $ = (s)=>document.querySelector(s), $$=(s)=>[...document.querySelectorAll(s)];
+const state={rows:[],current:null,detail:null,sample:""};
+
+function pill(text,cls){ if(!text) return '<span class="pill p-none">—</span>';
+  return `<span class="pill ${cls||"p-none"}">${text}</span>`; }
+function aiCls(a){ return {"LIKELY_TRUE_VARIANT":"p-good","SUSPECTED_FALSE_POSITIVE":"p-bad",
+  "INCONCLUSIVE":"p-warn","INSUFFICIENT_EVIDENCE":"p-warn"}[a]||"p-none"; }
+function priCls(p){ return {"HIGH":"p-hi","MEDIUM":"p-med","LOW":"p-low"}[p]||"p-none"; }
+function decLabel(d){ return {"accept_variant":"接受","reject_variant":"拒绝",
+  "needs_further_review":"需进一步复核","insufficient_evidence":"证据不足"}[d]||d||"—"; }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function api(p,opts){ const r=await fetch(p,opts); if(!r.ok) throw new Error(await r.text());
+  return r.json(); }
+
+async function boot(){
+  const cfg=await api("/api/config");
+  $("#cfgBadge").textContent=`${cfg.project_name} · ${cfg.reference_build} · ${cfg.analysis.data_type}`;
+  const samples=await api("/api/samples");
+  $("#sampleSel").innerHTML='<option value="">全部样本</option>'+samples.map(s=>
+    `<option value="${esc(s.sample_id)}">${esc(s.sample_id)}</option>`).join("");
+  $("#sampleSel").onchange=()=>{state.sample=$("#sampleSel").value; loadQueue(); loadSamples(); loadFn();};
+  await loadQueue(); await loadSamples(); await loadFn(); await loadAudit();
+}
+
+async function loadQueue(){
+  const params=new URLSearchParams();
+  if(state.sample) params.set("sample_id",state.sample);
+  if($("#q").value) params.set("q",$("#q").value);
+  if($("#fPriority").value) params.set("priority",$("#fPriority").value);
+  if($("#fAi").value) params.set("ai",$("#fAi").value);
+  if($("#fDecision").value) params.set("decision",$("#fDecision").value);
+  const data=await api("/api/variants?"+params);
+  state.rows=data.rows;
+  const m=await api("/api/metrics"+(state.sample?("?sample_id="+encodeURIComponent(state.sample)):""));
+  $("#kpis").innerHTML=[
+    ["变异总数",m.total_variants],["已 AI 复核",m.ai_reviewed],["需人工复核",m.ai_escalated_to_human],
+    ["已人工结论",m.human_decided],["待处理",m.pending_human_review],
+    ["疑似假阳性",m.suspected_false_positives],["无法判定",m.inconclusive],
+    ["证据不足",m.insufficient_evidence],["截图失败",m.snapshot_failures]
+  ].map(([k,v])=>`<div class="card"><div class="v">${v??0}</div><div class="l">${k}</div></div>`).join("");
+  $("#queueHint").textContent=`共 ${data.total} 条`;
+  const rows=data.rows.map(r=>`<tr onclick="openDetail('${r.variant_uid}')">
+    <td class="mono">${esc(r.sample_id)}</td>
+    <td class="mono">${esc(r.variant_uid)}</td>
+    <td class="mono">${esc(r.chrom)}:${esc(r.pos)}</td>
+    <td class="mono">${esc(r.ref)}&gt;${esc(r.alt)}</td>
+    <td>${esc(r.genotype)}</td>
+    <td>${esc(r.caller_dp)}</td>
+    <td>${r.bam_vaf!=null?Number(r.bam_vaf).toFixed(2):"—"}</td>
+    <td>${esc(r.caller_gq)}</td>
+    <td>${esc(r.vcf_filter)}</td>
+    <td>${pill(r.ai_recommendation||"未复核",aiCls(r.ai_recommendation))}</td>
+    <td>${r.ai_risk_score!=null?r.ai_risk_score:""}</td>
+    <td>${pill(r.triage_priority,priCls(r.triage_priority))}</td>
+    <td>${r.human_decision?pill(decLabel(r.human_decision),"p-good"):'<span class="pill p-warn">待审核</span>'}</td>
+    <td>${esc(r.human_reviewer)}</td></tr>`).join("");
+  $("#queueTable").innerHTML=`<table><thead><tr>
+    <th>样本</th><th>变异ID</th><th>坐标</th><th>等位</th><th>GT</th><th>DP</th><th>VAF</th>
+    <th>GQ</th><th>FILTER</th><th>AI 建议</th><th>风险分</th><th>优先级</th><th>人工结论</th><th>审核人</th>
+    </tr></thead><tbody>${rows||'<tr><td colspan="14" class="empty">暂无数据</td></tr>'}</tbody></table>`;
+}
+
+async function openDetail(uid){
+  state.current=uid;
+  const d=await api("/api/variants/"+encodeURIComponent(uid));
+  state.detail=d;
+  const v=d.variant, ai=d.ai_reviews[0]||null, h=d.human_reviews[0]||null;
+  const shots=d.snapshots.map(s=>`<div class="shot">
+      ${s.status==="CAPTURED"?`<img src="/api/snapshots/${s.id}/image" alt="${esc(s.kind)}">`:
+        `<div style="padding:26px;color:#9aa4b2;text-align:center">截图失败：${esc(s.status)}</div>`}
+      <div class="cap"><span>${esc(s.kind)} · ${esc(s.locus)}</span>
+      <span>${esc(s.genome_build)} · ${esc((s.captured_at||"").slice(0,19))}</span></div></div>`).join("")
+      || `<div class="empty">该变异暂无 IGV 截图</div>`;
+  const ev=d.evidence||{}, vcm=ai?ai.vcf_metrics||{}:{}, bam=ai?ai.bam_metrics||{};
+  const rules=(d.rule_hits||[]).map(r=>`<li>${pill(r.rule_id,r.severity==="high"?"p-bad":r.severity==="warning"?"p-warn":"p-none")}
+    <span class="tag">观测 ${esc(r.observed_value)}</span>
+    <span class="tag">阈值 ${esc(r.configured_threshold)}</span> ${esc(r.reason)}</li>`).join("")
+      || '<li>未触发任何规则</li>';
+  $("#detail").innerHTML=`<div class="grid2" style="margin-top:4px">
+    <div class="panel"><h2>IGV 视图 <span class="hint">${esc(v.variant_uid)}</span></h2>${shots}</div>
+    <div>
+      <div class="panel"><h2>变异信息</h2><dl class="kv">
+        <dt>坐标</dt><dd>${esc(v.chrom)}:${esc(v.pos)} ${esc(v.ref)}&gt;${esc(v.alt)}</dd>
+        <dt>类型 / GT</dt><dd>${esc(v.variant_type)} / ${esc(v.genotype)}</dd>
+        <dt>VCF FILTER</dt><dd>${esc(v.vcf_filter)}</dd>
+        <dt>QUAL</dt><dd>${esc(v.qual)}</dd>
+        <dt>原始表示</dt><dd>${esc(v.original.chrom)}:${esc(v.original.pos)} ${esc(v.original.ref)}&gt;${esc(v.original.alt)}</dd>
+        <dt>DP / GQ</dt><dd>${esc(v.info.DP)} / ${esc(v.info.GQ)}</dd>
+        <dt>AD(REF/ALT)</dt><dd>${esc(v.info.AD_REF)} / ${esc(v.info.AD_ALT)}</dd>
+      </dl></div>
+      <div class="panel"><h2>BAM 定量证据 <span class="hint">权威判据</span></h2><dl class="kv">
+        <dt>总深度</dt><dd>${esc(ev.total_reads)}</dd>
+        <dt>可用深度</dt><dd>${esc(ev.usable_reads)}</dd>
+        <dt>REF / ALT / 其他</dt><dd>${esc(ev.ref_count)} / ${esc(ev.alt_count)} / ${esc(ev.other_count)}</dd>
+        <dt>VAF</dt><dd>${ev.vaf!=null?Number(ev.vaf).toFixed(3):"—"}</dd>
+        <dt>链偏倚</dt><dd>${ev.strand_ratio_imbalance!=null?Number(ev.strand_ratio_imbalance).toFixed(2):"—"}</dd>
+        <dt>MAPQ / BQ</dt><dd>${esc(ev.mean_mapq_alt)} / ${esc(ev.mean_baseq_alt)}</dd>
+        <dt>重复率 / 软剪切</dt><dd>${esc(ev.dup_frac)} / ${esc(ev.softclip_frac)}</dd>
+        <dt>AD 一致性</dt><dd>${ev.ad_consistency===false?'<span class="no">不一致</span>':(ev.ad_consistency===true?'<span class="ok">一致</span>':'—')}</dd>
+      </dl></div>
+      <div class="panel"><h2>风险规则命中</h2><ul class="list">${rules}</ul></div>
+      <div class="panel"><h2>AI 结论</h2>
+        <div style="padding:12px 16px">
+          <div class="split" style="margin-bottom:8px">
+            ${ai?pill(ai.ai_recommendation,aiCls(ai.ai_recommendation)):""}
+            ${pill("风险分 "+(ai?ai.risk_score:"—"))}
+            ${pill(ai?ai.model_name:"—")}
+            ${pill("视觉复核 "+(ai&&ai.visual_review_performed?"已执行":"未执行"))}
+          </div>
+          <p style="margin:6px 0">${esc(ai?ai.evidence_summary:"尚未进行 AI 复核")}</p>
+          <div class="sec" style="padding-left:0">支持证据</div>
+          <ul class="list" style="padding-left:0">${(ai&&ai.supporting_evidence||[]).map(x=>`<li class="ok">${esc(x)}</li>`).join("")||'<li>—</li>'}</ul>
+          <div class="sec" style="padding-left:0">冲突证据</div>
+          <ul class="list" style="padding-left:0">${(ai&&ai.conflicting_evidence||[]).map(x=>`<li class="no">${esc(x)}</li>`).join("")||'<li>—</li>'}</ul>
+          <div class="sec" style="padding-left:0">系统限制</div>
+          <ul class="list" style="padding-left:0">${(ai&&ai.limitations||[]).map(x=>`<li>${esc(x)}</li>`).join("")||'<li>—</li>'}</ul>
+        </div></div>
+      <div class="panel"><h2>人工审核 <span class="hint">历史结论保留不覆盖</span></h2>
+        <div class="row">
+          <input id="reviewer" placeholder="审核人" style="width:130px">
+          <input id="reason" placeholder="原因（可选）" style="width:180px">
+          <input id="comment" placeholder="备注（可选）" style="flex:1;min-width:150px">
+        </div>
+        <div class="row">
+          <button class="btn" onclick="decide('accept_variant')">接受变异</button>
+          <button class="btn bad" onclick="decide('reject_variant')">拒绝变异</button>
+          <button class="btn warn" onclick="decide('needs_further_review')">需进一步复核</button>
+          <button class="btn ghost" onclick="decide('insufficient_evidence')">证据不足</button>
+        </div>
+        <ul class="list">${d.human_reviews.map(x=>`<li><b>${esc(decLabel(x.decision))}</b> · ${esc(x.reviewer)} ·
+          ${esc((x.created_at||"").slice(0,19))} ${x.superseded_by?'<span class="tag">已被新结论取代</span>':''}
+          ${x.comment?`<div style="color:var(--muted)">${esc(x.comment)}</div>`:""}</li>`).join("")||'<li>尚无人工结论</li>'}</ul>
+      </div>
+    </div></div>`;
+  $("#detail").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+async function decide(decision){
+  const reviewer=$("#reviewer").value.trim();
+  if(!reviewer){ alert("请填写审核人"); return; }
+  await api("/api/variants/"+encodeURIComponent(state.current)+"/decision",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({reviewer,decision,reason:$("#reason").value||null,comment:$("#comment").value||null})});
+  await loadQueue(); await openDetail(state.current);
+}
+
+async function loadSamples(){
+  const samples=await api("/api/samples");
+  $("#samplesTable").innerHTML=`<table><thead><tr><th>样本</th><th>状态</th><th>参考基因组</th>
+    <th>变异数</th><th>复核任务</th><th>待处理</th><th>失败</th><th>AI 复核</th><th>人工结论</th><th>创建时间</th>
+    </tr></thead><tbody>${samples.map(s=>`<tr onclick="state.sample='${esc(s.sample_id)}';$('#sampleSel').value='${esc(s.sample_id)}';loadQueue();loadFn()">
+    <td class="mono">${esc(s.sample_id)}</td><td>${pill(s.status)}</td><td>${esc(s.reference_build)}</td>
+    <td>${s.variants}</td><td>${s.review_tasks}</td><td>${s.pending_reviews}</td><td>${s.failed_tasks}</td>
+    <td>${s.ai_reviews}</td><td>${s.human_reviews}</td><td>${esc((s.created_at||"").slice(0,19))}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function loadFn(){
+  if(!state.sample){ $("#fnTable").innerHTML='<div class="empty">请先在上方选择样本</div>'; return; }
+  const c=await api("/api/fn-candidates?sample_id="+encodeURIComponent(state.sample));
+  $("#fnTable").innerHTML=`<table><thead><tr><th>候选ID</th><th>坐标</th><th>来源</th><th>caller 状态</th>
+    <th>分类</th><th>可能漏检</th><th>可调用性</th></tr></thead><tbody>
+    ${c.map(x=>`<tr><td class="mono">${esc(x.candidate_id)}</td><td class="mono">${esc(x.locus)}</td>
+      <td>${esc(x.source)}</td><td>${esc(x.caller_status)}</td>
+      <td>${pill(x.classification,x.possible_missed_variant?"p-warn":"p-none")}</td>
+      <td>${x.possible_missed_variant?"是":"否"}</td><td>${esc(x.callable_status)}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function loadAudit(){
+  const rows=await api("/api/audit?limit=150");
+  $("#auditTable").innerHTML=`<table><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>详情</th>
+    </tr></thead><tbody>${rows.map(r=>`<tr><td class="mono">${esc((r.ts||"").slice(0,19))}</td>
+    <td class="mono">${esc(r.actor)}</td><td>${esc(r.action)}</td>
+    <td class="mono">${esc(r.entity_type||"")} ${esc(r.entity_id||"")}</td>
+    <td class="mono" style="max-width:520px;overflow:hidden;text-overflow:ellipsis">${esc(r.details||"")}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function exportReport(){
+  const f=await api("/api/reports"+(state.sample?("?sample_id="+encodeURIComponent(state.sample)):""));
+  alert("报告已生成：\n"+Object.values(f).join("\n"));
+}
+
+["#q","#fPriority","#fAi","#fDecision"].forEach(s=>$(s).addEventListener("input",loadQueue));
+$$("nav button").forEach(b=>b.onclick=()=>{
+  $$("nav button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  ["queue","samples","fn","audit"].forEach(t=>$("#tab-"+t).style.display=(t===b.dataset.tab?"":"none"));
+});
+boot().catch(e=>{document.body.insertAdjacentHTML("afterbegin",
+  `<div class="note" style="margin:20px">加载失败：${esc(e.message)}</div>`);});
+</script>
+</body></html>

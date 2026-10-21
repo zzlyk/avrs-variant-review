@@ -1,0 +1,86 @@
+# AVRS demo configuration - runs the full Mode-B loop on the synthetic demo set
+project_name: avrs-demo
+reference:
+  build: DEMO-GRCh38
+  fasta: outputs/demo/demo_reference.fa
+  chr_prefix: null
+  known_sites: []
+
+paths:
+  output_dir: outputs
+  snapshot_dir: outputs/snapshots
+  db: outputs/avrs.db
+  path_mapping:
+    - from: /mnt/f/codex/mcp-igv
+      to: F:/codex/mcp-igv
+
+analysis:
+  mode: review_only
+  sequencing: germline
+  data_type: panel
+  target_bed: null
+  platform: ILLUMINA
+
+triage:
+  profiles:
+    panel:
+      min_dp: 10
+      min_gq: 20
+      min_alt_ad: 3
+      min_mapq: 20
+      min_baseq: 13
+      max_strand_ratio_imbalance: 0.95
+      max_softclip_frac: 0.30
+      max_dup_frac: 0.20
+      min_dist_from_read_end: 5
+      max_start_pos_cluster_frac: 0.50
+      max_vaf_dev: 0.35
+      homopolymer_len: 6
+      low_complexity_window: 30
+      min_target_edge_dist: 10
+
+review:
+  modes: [suspicious_only]
+  target_genes: []
+  batch_size: 50
+  max_retries: 2
+  snapshot_wait_initial_s: 0.6
+  snapshot_poll_interval_s: 0.2
+  snapshot_timeout_s: 15.0
+  require_min_png_bytes: 2000
+  window_width_narrow: 60
+  window_width_context: 500
+  window_width_indel_pad: 30
+
+igv:
+  transport: direct
+  host: 127.0.0.1
+  port: 60151
+  mcp_command: null
+  mcp_args: []
+  max_panel_height: 1000
+  wait:
+    load_wait_s: 0.5
+    goto_wait_s: 0.3
+    command_timeout_s: 15.0
+
+ai:
+  provider: mock
+  model: mock-reviewer-v1
+  base_url: null
+  api_key_env: null
+  supports_vision: false
+  allow_remote_screenshot_transfer: false
+  timeout_s: 60.0
+  retries: 1
+  temperature: 0.0
+  max_output_tokens: 2000
+
+security:
+  local_first: true
+  redact_names_in_requests: true
+  max_llm_context_variants: 20
+
+logging:
+  level: INFO
+  file: outputs/avrs.log

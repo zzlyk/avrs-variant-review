@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avrs"
+version = "0.1.0"
+description = "AI Variant Review System - automated variant QC, IGV review and AI-assisted triage"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+    "PyYAML>=6.0",
+    "SQLAlchemy>=2.0",
+    "typer>=0.9",
+    "Jinja2>=3.1",
+    "httpx>=0.27",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+linux = ["pysam>=0.22"]  # BAM/VCF evidence backend for Linux/WSL2 (does not build on native Windows)
+dev = ["pytest>=8.0", "fastapi>=0.110", "httpx>=0.27"]
+
+[project.scripts]
+avrs = "avrs.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
